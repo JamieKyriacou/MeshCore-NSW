@@ -1,7 +1,5 @@
-name: MeshCore AU_NSW Firmware
 
-permissions:
-  contents: write
+name: MeshCore AU_NSW Firmware
 
 on:
   push:
@@ -24,12 +22,22 @@ jobs:
 
     env:
       DEFAULT_NODE_NAME: "AU_NSW Repeater"
-      DEFAULT_ADMIN_REALM: "au_nsw"  # Add this or remove from PLATFORMIO_BUILD_FLAGS
 
       LORA_FREQ: "915.8"     
       LORA_BW: "250"         
       LORA_SF: "11"
       LORA_CR: "5"
+
+      FIRMWARE_VERSION: "${{ github.ref_name }}"
+
+      PLATFORMIO_BUILD_FLAGS: >
+        -DLORA_FREQ=${{ env.LORA_FREQ }}
+        -DLORA_BW=${{ env.LORA_BW }}
+        -DLORA_SF=${{ env.LORA_SF }}
+        -DLORA_CR=${{ env.LORA_CR }}
+        -DDEFAULT_NODE_NAME=\"${{ env.DEFAULT_NODE_NAME }}\"
+        -DDEFAULT_ADMIN_REALM=\"${{ env.DEFAULT_ADMIN_REALM }}\"
+        -DFIRMWARE_VERSION=\"${{ env.FIRMWARE_VERSION }}\"
 
     steps:
       - name: Check out repository
@@ -59,21 +67,10 @@ jobs:
           pip install platformio
           pio --version
 
-      - name: Set version
-        run: |
-          echo "FIRMWARE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
-
       - name: Build (${{ matrix.target }})
-        env:
-          PLATFORMIO_BUILD_FLAGS: >-
-            -DLORA_FREQ=${{ env.LORA_FREQ }}
-            -DLORA_BW=${{ env.LORA_BW }}
-            -DLORA_SF=${{ env.LORA_SF }}
-            -DLORA_CR=${{ env.LORA_CR }}
-            -DDEFAULT_NODE_NAME='"${{ env.DEFAULT_NODE_NAME }}"'
-            -DDEFAULT_ADMIN_REALM='"${{ env.DEFAULT_ADMIN_REALM }}"'
         run: |
           set -euo pipefail
+          export PLATFORMIO_BUILD_FLAGS="${{ env.PLATFORMIO_BUILD_FLAGS }}"
           echo "PLATFORMIO_BUILD_FLAGS=${PLATFORMIO_BUILD_FLAGS}"
           chmod +x ./build.sh
           ./build.sh build-firmware ${{ matrix.target }}
@@ -91,10 +88,3 @@ jobs:
           name: firmware_${{ matrix.target }}
           path: artifacts/${{ matrix.target }}
           if-no-files-found: warn
-
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: artifacts/${{ matrix.target }}/*
-          fail_on_unmatched_files: false

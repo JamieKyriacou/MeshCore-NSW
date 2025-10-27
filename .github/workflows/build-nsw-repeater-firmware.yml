@@ -40,11 +40,12 @@ jobs:
 
       - name: Set firmware version
         run: |
-          if [ -n "${{ env.GIT_TAG_VERSION }}" ]; then
+          if [ -n "${{ env.GIT_TAG_VERSION }}" ] && [ "${{ env.GIT_TAG_VERSION }}" != "refs/heads/main" ]; then
             echo "FIRMWARE_VERSION=${{ env.GIT_TAG_VERSION }}" >> $GITHUB_ENV
           else
             echo "FIRMWARE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
           fi
+          echo "Firmware version set to: ${FIRMWARE_VERSION}"
 
       - name: Build Firmware (${{ matrix.target }})
         env:

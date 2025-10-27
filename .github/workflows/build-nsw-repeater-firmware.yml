@@ -38,16 +38,25 @@ jobs:
       - name: Setup Build Environment
         uses: ./.github/actions/setup-build-environment
 
+      - name: Set firmware version
+        run: |
+          if [ -n "${{ env.GIT_TAG_VERSION }}" ]; then
+            echo "FIRMWARE_VERSION=${{ env.GIT_TAG_VERSION }}" >> $GITHUB_ENV
+          else
+            echo "FIRMWARE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
       - name: Build Firmware (${{ matrix.target }})
         env:
-          FIRMWARE_VERSION: ${{ env.GIT_TAG_VERSION }}
           PLATFORMIO_BUILD_FLAGS: >-
             -DLORA_FREQ=${{ env.LORA_FREQ }}
             -DLORA_BW=${{ env.LORA_BW }}
             -DLORA_SF=${{ env.LORA_SF }}
             -DLORA_CR=${{ env.LORA_CR }}
             -DDEFAULT_NODE_NAME='"${{ env.DEFAULT_NODE_NAME }}"'
-        run: /usr/bin/env bash build.sh build-firmware ${{ matrix.target }}
+        run: |
+          echo "Building with FIRMWARE_VERSION=${FIRMWARE_VERSION}"
+          /usr/bin/env bash build.sh build-firmware ${{ matrix.target }}
 
       - name: List build outputs
         run: |

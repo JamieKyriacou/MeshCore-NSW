@@ -1,4 +1,4 @@
-name: Build Repeater Firmwares
+name: Build NSW Repeater Firmwares
 
 permissions:
   contents: write
@@ -49,17 +49,23 @@ jobs:
             -DDEFAULT_NODE_NAME='"${{ env.DEFAULT_NODE_NAME }}"'
         run: /usr/bin/env bash build.sh build-firmware ${{ matrix.target }}
 
+      - name: List build outputs
+        run: |
+          echo "Contents of out/ directory:"
+          ls -lah out/ || echo "out/ directory not found"
+          echo "Contents of .pio/build/${{ matrix.target }}:"
+          ls -lah .pio/build/${{ matrix.target }}/ || echo "Build directory not found"
+
       - name: Upload Workflow Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware_${{ matrix.target }}
           path: out
+          if-no-files-found: warn
 
-      - name: Create Release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: Repeater Firmware ${{ env.GIT_TAG_VERSION }}
-          body: ""
-          draft: true
           files: out/*
+          fail_on_unmatched_files: false

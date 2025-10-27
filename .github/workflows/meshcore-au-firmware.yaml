@@ -1,0 +1,90 @@
+name: MeshCore AU_NSW Firmware
+
+on:
+  push:
+    branches: [dev, main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - Heltec_t114_without_display_repeater
+          - Heltec_t114_repeater
+          - RAK_4631_repeater
+          - Xiao_nrf52_repeater
+
+    env:
+      DEFAULT_NODE_NAME: "AU_NSW Repeater"
+      DEFAULT_ADMIN_REALM: "au_nsw"  # Add this or remove from PLATFORMIO_BUILD_FLAGS
+
+      LORA_FREQ: "915.8"     
+      LORA_BW: "250"         
+      LORA_SF: "11"
+      LORA_CR: "5"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio
+          key: pio-${{ runner.os }}-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+          pio --version
+
+      - name: Set version
+        run: |
+          echo "FIRMWARE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+
+      - name: Build (${{ matrix.target }})
+        env:
+          PLATFORMIO_BUILD_FLAGS: >-
+            -DLORA_FREQ=${{ env.LORA_FREQ }}
+            -DLORA_BW=${{ env.LORA_BW }}
+            -DLORA_SF=${{ env.LORA_SF }}
+            -DLORA_CR=${{ env.LORA_CR }}
+            -DDEFAULT_NODE_NAME='"${{ env.DEFAULT_NODE_NAME }}"'
+            -DDEFAULT_ADMIN_REALM='"${{ env.DEFAULT_ADMIN_REALM }}"'
+        run: |
+          set -euo pipefail
+          echo "PLATFORMIO_BUILD_FLAGS=${PLATFORMIO_BUILD_FLAGS}"
+          chmod +x ./build.sh
+          ./build.sh build-firmware ${{ matrix.target }}
+
+      - name: Collect firmware artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/${{ matrix.target }}
+          find . -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.uf2" -o -name "*.zip" \) -print \
+            | while IFS= read -r f; do cp "$f" "artifacts/${{ matrix.target }}/" || true; done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware_${{ matrix.target }}
+          path: artifacts/${{ matrix.target }}
+          if-no-files-found: warn

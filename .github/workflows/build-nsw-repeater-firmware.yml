@@ -1,0 +1,65 @@
+name: Build Repeater Firmwares
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'repeater-*'
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - Heltec_t114_without_display_repeater
+          - Heltec_t114_repeater
+          - RAK_4631_repeater
+          - Xiao_nrf52_repeater
+    
+    env:
+      DEFAULT_NODE_NAME: "AU_NSW Repeater"
+      LORA_FREQ: "915.8"
+      LORA_BW: "250"
+      LORA_SF: "11"
+      LORA_CR: "5"
+    
+    steps:
+
+      - name: Clone Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Build Environment
+        uses: ./.github/actions/setup-build-environment
+
+      - name: Build Firmware (${{ matrix.target }})
+        env:
+          FIRMWARE_VERSION: ${{ env.GIT_TAG_VERSION }}
+          PLATFORMIO_BUILD_FLAGS: >-
+            -DLORA_FREQ=${{ env.LORA_FREQ }}
+            -DLORA_BW=${{ env.LORA_BW }}
+            -DLORA_SF=${{ env.LORA_SF }}
+            -DLORA_CR=${{ env.LORA_CR }}
+            -DDEFAULT_NODE_NAME='"${{ env.DEFAULT_NODE_NAME }}"'
+        run: /usr/bin/env bash build.sh build-firmware ${{ matrix.target }}
+
+      - name: Upload Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware_${{ matrix.target }}
+          path: out
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: Repeater Firmware ${{ env.GIT_TAG_VERSION }}
+          body: ""
+          draft: true
+          files: out/*

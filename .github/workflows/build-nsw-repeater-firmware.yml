@@ -6,6 +6,11 @@ permissions:
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      tag_name:
+        description: 'Tag name to build'
+        required: false
+        type: string
   push:
     tags:
       - 'repeater-*'
@@ -35,6 +40,8 @@ jobs:
 
       - name: Clone Repo
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name || github.ref }}
 
       - name: Setup Build Environment
         uses: ./.github/actions/setup-build-environment

@@ -2,6 +2,7 @@ name: Create Weekly Release Tag
 
 permissions:
   contents: write
+  actions: write
 
 on:
   workflow_dispatch:
@@ -13,6 +14,10 @@ jobs:
   create-tag:
     runs-on: ubuntu-latest
     
+    outputs:
+      tag_name: ${{ steps.create_tag.outputs.tag_name }}
+      tag_created: ${{ steps.create_tag.outputs.tag_created }}
+    
     steps:
       - name: Clone Repo
         uses: actions/checkout@v4
@@ -20,6 +25,7 @@ jobs:
           fetch-depth: 0
 
       - name: Create and Push Tag
+        id: create_tag
         run: |
           # Get current week and year (ISO week date format)
           WEEK=$(date +%V)
@@ -35,6 +41,7 @@ jobs:
           # Check if tag already exists
           if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
             echo "Tag ${TAG_NAME} already exists, skipping"
+            echo "tag_created=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
@@ -43,3 +50,12 @@ jobs:
           git push origin "${TAG_NAME}"
           
           echo "Tag ${TAG_NAME} created and pushed successfully"
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "tag_created=true" >> $GITHUB_OUTPUT
+
+  trigger-build:
+    needs: create-tag
+    if: needs.create-tag.outputs.tag_created == 'true'
+    uses: ./.github/workflows/build-nsw-repeater-firmware.yml
+    permissions:
+      contents: write

@@ -1,0 +1,45 @@
+name: Create Weekly Release Tag
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Clone Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and Push Tag
+        run: |
+          # Get current week and year (ISO week date format)
+          WEEK=$(date +%V)
+          YEAR=$(date +%Y)
+          TAG_NAME="repeater-nsw-${YEAR}.${WEEK}"
+          
+          echo "Creating tag: ${TAG_NAME}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if tag already exists
+          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists, skipping"
+            exit 0
+          fi
+          
+          # Create and push tag
+          git tag -a "${TAG_NAME}" -m "Weekly NSW Repeater Firmware Release - Week ${WEEK}, ${YEAR}"
+          git push origin "${TAG_NAME}"
+          
+          echo "Tag ${TAG_NAME} created and pushed successfully"

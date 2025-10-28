@@ -5,12 +5,9 @@ permissions:
 
 on:
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      tag_name:
-        description: 'Tag name to build'
-        required: false
-        type: string
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
   push:
     tags:
       - 'repeater-*'
@@ -40,8 +37,34 @@ jobs:
 
       - name: Clone Repo
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag_name || github.ref }}
+
+      - name: Create Tag (if scheduled)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          # Get current week and year (ISO week date format)
+          WEEK=$(date +%V)
+          YEAR=$(date +%Y)
+          TAG_NAME="repeater-nsw-${YEAR}.${WEEK}"
+          
+          echo "Creating tag: ${TAG_NAME}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if tag already exists
+          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists"
+          else
+            # Create and push tag
+            git tag -a "${TAG_NAME}" -m "Weekly NSW Repeater Firmware Release - Week ${WEEK}, ${YEAR}"
+            git push origin "${TAG_NAME}"
+            echo "Tag ${TAG_NAME} created and pushed"
+          fi
+          
+          # Checkout the tag
+          git fetch --tags
+          git checkout "${TAG_NAME}"
 
       - name: Setup Build Environment
         uses: ./.github/actions/setup-build-environment

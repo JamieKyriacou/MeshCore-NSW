@@ -27,10 +27,11 @@ jobs:
       - name: Create and Push Tag
         id: create_tag
         run: |
-          # Get current week and year (ISO week date format)
-          WEEK=$(date +%V)
+          # Get current date (YYYY-MM-DD)
           YEAR=$(date +%Y)
-          TAG_NAME="repeater-nsw-${YEAR}.${WEEK}"
+          MONTH=$(date +%m)
+          DAY=$(date +%d)
+          TAG_NAME="repeater-nsw-${YEAR}-${MONTH}-${DAY}"
           
           echo "Creating tag: ${TAG_NAME}"
           

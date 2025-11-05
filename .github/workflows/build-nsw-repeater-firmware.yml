@@ -34,11 +34,11 @@ jobs:
           # Fetch all tags
           git fetch --tags --force
           
-          # Find the most recent repeater-nsw-* tag
-          LAST_TAG=$(git tag -l "repeater-nsw-*" | sort -V | tail -n 1)
+          # Find the most recent repeater-nsw-* tag by commit date
+          LAST_TAG=$(git tag -l "repeater-nsw-*" --sort=-creatordate | head -n 1)
           
-          echo "All repeater-nsw tags found:"
-          git tag -l "repeater-nsw-*" | sort -V
+          echo "All repeater-nsw tags found (sorted by date):"
+          git tag -l "repeater-nsw-*" --sort=-creatordate
           
           if [ -z "$LAST_TAG" ]; then
             echo "No previous repeater-nsw tags found, will create new release"

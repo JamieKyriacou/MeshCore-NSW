@@ -31,8 +31,14 @@ jobs:
       - name: Check for changes since last tag
         id: check_changes
         run: |
+          # Fetch all tags
+          git fetch --tags --force
+          
           # Find the most recent repeater-nsw-* tag
           LAST_TAG=$(git tag -l "repeater-nsw-*" | sort -V | tail -n 1)
+          
+          echo "All repeater-nsw tags found:"
+          git tag -l "repeater-nsw-*" | sort -V
           
           if [ -z "$LAST_TAG" ]; then
             echo "No previous repeater-nsw tags found, will create new release"

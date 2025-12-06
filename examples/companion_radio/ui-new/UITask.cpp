@@ -20,7 +20,11 @@
   #define UI_RECENT_LIST_SIZE 4
 #endif
 
-#define PRESS_LABEL "long press"
+#if UI_HAS_JOYSTICK
+  #define PRESS_LABEL "press Enter"
+#else
+  #define PRESS_LABEL "long press"
+#endif
 
 #include "icons.h"
 
@@ -75,6 +79,9 @@ class HomeScreen : public UIScreen {
     RADIO,
     BLUETOOTH,
     ADVERT,
+#if ENV_INCLUDE_GPS == 1
+    GPS,
+#endif
 #if UI_SENSORS_PAGE == 1
     SENSORS,
 #endif
@@ -170,7 +177,7 @@ public:
 
     // curr page indicator
     int y = 14;
-    int x = display.width() / 2 - 25;
+    int x = display.width() / 2 - 5 * (HomePage::Count-1);
     for (uint8_t i = 0; i < HomePage::Count; i++, x += 10) {
       if (i == _page) {
         display.fillRect(x-1, y-1, 3, 3);
@@ -250,6 +257,45 @@ public:
       display.setColor(DisplayDriver::GREEN);
       display.drawXbm((display.width() - 32) / 2, 18, advert_icon, 32, 32);
       display.drawTextCentered(display.width() / 2, 64 - 11, "advert: " PRESS_LABEL);
+#if ENV_INCLUDE_GPS == 1
+    } else if (_page == HomePage::GPS) {
+      LocationProvider* nmea = sensors.getLocationProvider();
+      char buf[50];
+      int y = 18;
+      bool gps_state = _task->getGPSState();
+#ifdef PIN_GPS_SWITCH
+      bool hw_gps_state = digitalRead(PIN_GPS_SWITCH);
+      if (gps_state != hw_gps_state) {
+        strcpy(buf, gps_state ? "gps off(hw)" : "gps off(sw)");
+      } else {
+        strcpy(buf, gps_state ? "gps on" : "gps off");
+      }
+#else
+      strcpy(buf, gps_state ? "gps on" : "gps off");
+#endif
+      display.drawTextLeftAlign(0, y, buf);
+      if (nmea == NULL) {
+        y = y + 12;
+        display.drawTextLeftAlign(0, y, "Can't access GPS");
+      } else {
+        strcpy(buf, nmea->isValid()?"fix":"no fix");
+        display.drawTextRightAlign(display.width()-1, y, buf);
+        y = y + 12;
+        display.drawTextLeftAlign(0, y, "sat");
+        sprintf(buf, "%d", nmea->satellitesCount());
+        display.drawTextRightAlign(display.width()-1, y, buf);
+        y = y + 12;
+        display.drawTextLeftAlign(0, y, "pos");
+        sprintf(buf, "%.4f %.4f", 
+          nmea->getLatitude()/1000000., nmea->getLongitude()/1000000.);
+        display.drawTextRightAlign(display.width()-1, y, buf);
+        y = y + 12;
+        display.drawTextLeftAlign(0, y, "alt");
+        sprintf(buf, "%.2f", nmea->getAltitude()/1000.);
+        display.drawTextRightAlign(display.width()-1, y, buf);
+        y = y + 12;
+      }
+#endif
 #if UI_SENSORS_PAGE == 1
     } else if (_page == HomePage::SENSORS) {
       int y = 18;
@@ -329,7 +375,7 @@ public:
         display.drawTextCentered(display.width() / 2, 34, "hibernating...");
       } else {
         display.drawXbm((display.width() - 32) / 2, 18, power_icon, 32, 32);
-        display.drawTextCentered(display.width() / 2, 64 - 11, "hibernate: " PRESS_LABEL);
+        display.drawTextCentered(display.width() / 2, 64 - 11, "hibernate:" PRESS_LABEL);
       }
     }
     return 5000;   // next render after 5000 ms
@@ -364,6 +410,12 @@ public:
       }
       return true;
     }
+#if ENV_INCLUDE_GPS == 1
+    if (c == KEY_ENTER && _page == HomePage::GPS) {
+      _task->toggleGPS();
+      return true;
+    }
+#endif
 #if UI_SENSORS_PAGE == 1
     if (c == KEY_ENTER && _page == HomePage::SENSORS) {
       _task->toggleGPS();
@@ -491,6 +543,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
 #ifdef PIN_BUZZER
   buzzer.begin();
+  buzzer.quiet(_node_prefs->buzzer_quiet);
 #endif
 
 #ifdef PIN_VIBRATION
@@ -577,7 +630,7 @@ void UITask::userLedHandler() {
       led_state = 0;
       next_led_change = cur_time + LED_CYCLE_MILLIS - last_led_increment;
     }
-    digitalWrite(PIN_STATUS_LED, led_state);
+    digitalWrite(PIN_STATUS_LED, led_state == LED_STATE_ON);
   }
 #endif
 }
@@ -609,6 +662,7 @@ void UITask::shutdown(bool restart){
     _board->reboot();
   } else {
     _display->turnOff();
+    radio_driver.powerOff();
     _board->powerOff();
   }
 }
@@ -623,19 +677,13 @@ bool UITask::isButtonPressed() const {
 
 void UITask::loop() {
   char c = 0;
-#if defined(PIN_USER_BTN)
+#if UI_HAS_JOYSTICK
   int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
-    c = checkDisplayOn(KEY_NEXT);
+    c = checkDisplayOn(KEY_ENTER);
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
-    c = handleLongPress(KEY_ENTER);
-  } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
-    c = handleDoubleClick(KEY_PREV);
-  } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    c = handleTripleClick(KEY_SELECT);
+    c = handleLongPress(KEY_ENTER);  // REVISIT: could be mapped to different key code
   }
-#endif
-#if defined(WIO_TRACKER_L1)
   ev = joystick_left.check();
   if (ev == BUTTON_EVENT_CLICK) {
     c = checkDisplayOn(KEY_LEFT);
@@ -648,9 +696,12 @@ void UITask::loop() {
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_RIGHT);
   }
-#endif
-#if defined(PIN_USER_BTN_ANA)
-  ev = analog_btn.check();
+  ev = back_btn.check();
+  if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
+    c = handleTripleClick(KEY_SELECT);
+  }
+#elif defined(PIN_USER_BTN)
+  int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
     c = checkDisplayOn(KEY_NEXT);
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
@@ -661,10 +712,29 @@ void UITask::loop() {
     c = handleTripleClick(KEY_SELECT);
   }
 #endif
-#if defined(DISP_BACKLIGHT) && defined(BACKLIGHT_BTN)
+#if defined(PIN_USER_BTN_ANA)
+  if (abs(millis() - _analogue_pin_read_millis) > 10) {
+    ev = analog_btn.check();
+    if (ev == BUTTON_EVENT_CLICK) {
+      c = checkDisplayOn(KEY_NEXT);
+    } else if (ev == BUTTON_EVENT_LONG_PRESS) {
+      c = handleLongPress(KEY_ENTER);
+    } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
+      c = handleDoubleClick(KEY_PREV);
+    } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
+      c = handleTripleClick(KEY_SELECT);
+    }
+    _analogue_pin_read_millis = millis();
+  }
+#endif
+#if defined(BACKLIGHT_BTN)
   if (millis() > next_backlight_btn_check) {
     bool touch_state = digitalRead(PIN_BUTTON2);
+#if defined(DISP_BACKLIGHT)
     digitalWrite(DISP_BACKLIGHT, !touch_state);
+#elif defined(EXP_PIN_BACKLIGHT)
+    expander.digitalWrite(EXP_PIN_BACKLIGHT, !touch_state);
+#endif
     next_backlight_btn_check = millis() + 300;
   }
 #endif
@@ -773,6 +843,18 @@ char UITask::handleTripleClick(char c) {
   return c;
 }
 
+bool UITask::getGPSState() {
+  if (_sensors != NULL) {
+    int num = _sensors->getNumSettings();
+    for (int i = 0; i < num; i++) {
+      if (strcmp(_sensors->getSettingName(i), "gps") == 0) {
+        return !strcmp(_sensors->getSettingValue(i), "1");
+      }
+    }
+  } 
+  return false;
+}
+
 void UITask::toggleGPS() {
     if (_sensors != NULL) {
     // toggle GPS on/off
@@ -806,6 +888,8 @@ void UITask::toggleBuzzer() {
       buzzer.quiet(true);
       showAlert("Buzzer: OFF", 800);
     }
+    _node_prefs->buzzer_quiet = buzzer.isQuiet();
+    the_mesh.savePrefs();
     _next_refresh = 0;  // trigger refresh
   #endif
 }

@@ -11,7 +11,7 @@ WRAPPER_CLASS radio_driver(radio, board);
 
 VolatileRTCClock fallback_clock;
 AutoDiscoverRTCClock rtc_clock(fallback_clock);
-MicroNMEALocationProvider nmea = MicroNMEALocationProvider(Serial1);
+MicroNMEALocationProvider nmea = MicroNMEALocationProvider(Serial1, &rtc_clock);
 T114SensorManager sensors = T114SensorManager(nmea);
 
 #ifdef DISPLAY_CLASS
@@ -74,11 +74,10 @@ bool T114SensorManager::begin() {
 
   if (gps_detected) {
     MESH_DEBUG_PRINTLN("GPS detected");
-    digitalWrite(GPS_EN, LOW);  // Power off GPS until the setting is changed
   } else {
     MESH_DEBUG_PRINTLN("No GPS detected");
-    digitalWrite(GPS_EN, LOW);
   }
+  digitalWrite(GPS_EN, LOW);  // Power off GPS until the setting is changed
 
   return true;
 }

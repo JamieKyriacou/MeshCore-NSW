@@ -1,38 +1,43 @@
-#ifdef XIAO_NRF52
+#ifdef IKOKA_NRF52
 
 #include <Arduino.h>
-#include "ikoka_stick_nrf_board.h"
-
-#include <bluefruit.h>
 #include <Wire.h>
+#include <bluefruit.h>
+
+#include "IkokaNrf52Board.h"
 
 static BLEDfu bledfu;
 
-static void connect_callback(uint16_t conn_handle)
-{
+static void connect_callback(uint16_t conn_handle) {
   (void)conn_handle;
   MESH_DEBUG_PRINTLN("BLE client connected");
 }
 
-static void disconnect_callback(uint16_t conn_handle, uint8_t reason)
-{
+static void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   (void)conn_handle;
   (void)reason;
 
   MESH_DEBUG_PRINTLN("BLE client disconnected");
 }
 
-void ikoka_stick_nrf_board::begin() {
+void IkokaNrf52Board::begin() {
   // for future use, sub-classes SHOULD call this from their begin()
   startup_reason = BD_STARTUP_NORMAL;
+
+  // ensure we have pull ups on the screen i2c, this isn't always available
+  // in hardware and it should only be 20k ohms. Disable the pullups if we
+  // are using the rotated lcd breakout board
+  #if defined(DISPLAY_CLASS) && DISPLAY_ROTATION == 0
+    pinMode(PIN_WIRE_SDA, INPUT_PULLUP);
+    pinMode(PIN_WIRE_SCL, INPUT_PULLUP);
+  #endif
 
   pinMode(PIN_VBAT, INPUT);
   pinMode(VBAT_ENABLE, OUTPUT);
   digitalWrite(VBAT_ENABLE, HIGH);
 
-#ifdef PIN_USER_BTN
-  pinMode(PIN_USER_BTN, INPUT_PULLUP);
-#endif
+  // required button pullup is handled as part of button initilization
+  // in target.cpp
 
 #if defined(PIN_WIRE_SDA) && defined(PIN_WIRE_SCL)
   Wire.setPins(PIN_WIRE_SDA, PIN_WIRE_SCL);
@@ -45,12 +50,10 @@ void ikoka_stick_nrf_board::begin() {
   digitalWrite(P_LORA_TX_LED, HIGH);
 #endif
 
-//  pinMode(SX126X_POWER_EN, OUTPUT);
-//  digitalWrite(SX126X_POWER_EN, HIGH);
-  delay(10);   // give sx1262 some time to power up
+  delay(10); // give sx1262 some time to power up
 }
 
-bool ikoka_stick_nrf_board::startOTAUpdate(const char* id, char reply[]) {
+bool IkokaNrf52Board::startOTAUpdate(const char *id, char reply[]) {
   // Config the peripheral connection with maximum bandwidth
   // more SRAM required by SoftDevice
   // Note: All config***() function must be called before begin()
@@ -90,10 +93,8 @@ bool ikoka_stick_nrf_board::startOTAUpdate(const char* id, char reply[]) {
   Bluefruit.Advertising.start(0);             // 0 = Don't stop advertising after n seconds
 
   strcpy(reply, "OK - started");
+
   return true;
-
-
-  return false;
 }
 
 #endif

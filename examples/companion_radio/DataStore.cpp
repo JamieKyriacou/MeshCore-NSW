@@ -197,11 +197,7 @@ void DataStore::loadPrefs(NodePrefs& prefs, double& node_lat, double& node_lon) 
 }
 
 void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& node_lat, double& node_lon) {
-#if defined(RP2040_PLATFORM)
-  File file = _fs->open(filename, "r");
-#else
-  File file = _fs->open(filename);
-#endif
+  File file = openRead(_fs, filename);
   if (file) {
     uint8_t pad[8];
 
@@ -225,6 +221,7 @@ void DataStore::loadPrefsInt(const char *filename, NodePrefs& _prefs, double& no
     file.read((uint8_t *)&_prefs.multi_acks, sizeof(_prefs.multi_acks));                   // 77
     file.read(pad, 2);                                                                     // 78
     file.read((uint8_t *)&_prefs.ble_pin, sizeof(_prefs.ble_pin));                         // 80
+    file.read((uint8_t *)&_prefs.buzzer_quiet, sizeof(_prefs.buzzer_quiet));               // 84
 
     file.close();
   }
@@ -256,22 +253,14 @@ void DataStore::savePrefs(const NodePrefs& _prefs, double node_lat, double node_
     file.write((uint8_t *)&_prefs.multi_acks, sizeof(_prefs.multi_acks));                   // 77
     file.write(pad, 2);                                                                     // 78
     file.write((uint8_t *)&_prefs.ble_pin, sizeof(_prefs.ble_pin));                         // 80
+    file.write((uint8_t *)&_prefs.buzzer_quiet, sizeof(_prefs.buzzer_quiet));               // 84
 
     file.close();
   }
 }
 
 void DataStore::loadContacts(DataStoreHost* host) {
-#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
-  if (_getContactsChannelsFS()->exists("/contacts3")) {
-    File file = _getContactsChannelsFS()->open("/contacts3");
-#elif defined(RP2040_PLATFORM)
-    if (_fs->exists("/contacts3")) {
-    File file = _fs->open("/contacts3", "r");
-#else
-    if (_fs->exists("/contacts3")) {
-      File file = _fs->open("/contacts3", "r", false);
-#endif
+File file = openRead(_getContactsChannelsFS(), "/contacts3");
     if (file) {
       bool full = false;
       while (!full) {
@@ -299,7 +288,6 @@ void DataStore::loadContacts(DataStoreHost* host) {
       }
       file.close();
     }
-  }
 }
 
 void DataStore::saveContacts(DataStoreHost* host) {
@@ -332,16 +320,7 @@ void DataStore::saveContacts(DataStoreHost* host) {
 }
 
 void DataStore::loadChannels(DataStoreHost* host) {
-#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
-  if (_getContactsChannelsFS()->exists("/channels2")) {
-    File file = _getContactsChannelsFS()->open("/channels2");
-#elif defined(RP2040_PLATFORM)
-  if (_fs->exists("/channels2")) {
-    File file = _fs->open("/channels2", "r");
-#else
-  if (_fs->exists("/channels2")) {
-    File file = _fs->open("/channels2", "r", false);
-#endif
+    File file = openRead(_getContactsChannelsFS(), "/channels2");
     if (file) {
       bool full = false;
       uint8_t channel_idx = 0;
@@ -363,7 +342,6 @@ void DataStore::loadChannels(DataStoreHost* host) {
       }
       file.close();
     }
-  }
 }
 
 void DataStore::saveChannels(DataStoreHost* host) {
@@ -520,7 +498,7 @@ void DataStore::migrateToSecondaryFS() {
 }
 
 uint8_t DataStore::getBlobByKey(const uint8_t key[], int key_len, uint8_t dest_buf[]) {
-  File file = _getContactsChannelsFS()->open("/adv_blobs");
+  File file = openRead(_getContactsChannelsFS(), "/adv_blobs");
   uint8_t len = 0;  // 0 = not found
   if (file) {
     BlobRec tmp;
@@ -583,11 +561,7 @@ uint8_t DataStore::getBlobByKey(const uint8_t key[], int key_len, uint8_t dest_b
   sprintf(path, "/bl/%s", fname);
 
   if (_fs->exists(path)) {
-#if defined(RP2040_PLATFORM)
-    File f = _fs->open(path, "r");
-#else
-    File f = _fs->open(path);
-#endif
+    File f = openRead(_fs, path);
     if (f) {
       int len = f.read(dest_buf, 255); // currently MAX 255 byte blob len supported!!
       f.close();
